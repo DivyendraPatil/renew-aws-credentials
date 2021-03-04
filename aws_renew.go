@@ -13,16 +13,15 @@ import (
 )
 
 func main() {
-
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion("us-east-1"),
 	)
+
 	if err != nil {
 		fmt.Println("Error connecting to aws with config")
 	}
 
 	iamClient := iam.NewFromConfig(cfg)
-
 	ctx := context.TODO()
 
 	cred, err := iamClient.ListAccessKeys(ctx, nil)
@@ -30,16 +29,24 @@ func main() {
 		fmt.Printf("Failed to get access keys - %s\n", err)
 	}
 
-	userName := *cred.AccessKeyMetadata[0].UserName
+	deleteKeys := len(cred.AccessKeyMetadata) == 2
 
-	if len(cred.AccessKeyMetadata) == 2 {
-		keyToBeDeleted := getOldestAccessKey(cred)
-		deleteOldestAccessKey(ctx, iamClient, keyToBeDeleted, userName)
+	// Delete oldest key to make room for new key
+	if deleteKeys {
+		deleteKey(ctx, iamClient, *cred.AccessKeyMetadata[0].AccessKeyId)
 	}
 
-	accessKey, secretAccessKey := createNewAccessKey(ctx, iamClient, userName)
+	accessKey, secretAccessKey := createNewAccessKey(ctx, iamClient)
 	if accessKey != "error" {
 		writeToFile(accessKey, secretAccessKey)
+
+		// Delete the extra keys after new key creation
+		if deleteKeys {
+			deleteKey(ctx, iamClient, *cred.AccessKeyMetadata[1].AccessKeyId)
+		} else {
+			deleteKey(ctx, iamClient, *cred.AccessKeyMetadata[0].AccessKeyId)
+		}
+
 		fmt.Println("Credentials Updated!")
 	} else {
 		fmt.Println("Something went wrong creating new access keys")
@@ -81,25 +88,20 @@ func writeToFile(accessKey string, secretAccessKey string) {
 	}
 }
 
-func deleteOldestAccessKey(ctx context.Context, iamClient *iam.Client, keyToBeDeleted string, userName string) {
+func deleteKey(ctx context.Context, iamClient *iam.Client, keyToBeDeleted string) {
 	input := &iam.DeleteAccessKeyInput{
 		AccessKeyId: aws.String(keyToBeDeleted),
-		UserName:    aws.String(userName),
 	}
 
 	_, err := iamClient.DeleteAccessKey(ctx, input)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Fatal(err.Error())
 		return
 	}
 }
 
-func createNewAccessKey(ctx context.Context, iamClient *iam.Client, userName string) (string, string) {
-	input := &iam.CreateAccessKeyInput{
-		UserName: aws.String(userName),
-	}
-
-	result, err := iamClient.CreateAccessKey(ctx, input)
+func createNewAccessKey(ctx context.Context, iamClient *iam.Client) (string, string) {
+	result, err := iamClient.CreateAccessKey(ctx, nil)
 	if err != nil {
 		fmt.Println(err.Error())
 		return "error", "error"
@@ -107,12 +109,4 @@ func createNewAccessKey(ctx context.Context, iamClient *iam.Client, userName str
 	accessKey := *result.AccessKey.AccessKeyId
 	secretAccessKey := *result.AccessKey.SecretAccessKey
 	return accessKey, secretAccessKey
-}
-
-func getOldestAccessKey(cred *iam.ListAccessKeysOutput) string {
-	accessKeyData := cred.AccessKeyMetadata
-	if accessKeyData[0].CreateDate.Before(*accessKeyData[1].CreateDate) {
-		return *accessKeyData[0].AccessKeyId
-	}
-	return *accessKeyData[1].AccessKeyId
 }
