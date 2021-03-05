@@ -30,7 +30,7 @@ A prebuilt binary is already stored in the same directory.
 ```
 
 The script creates new credentials and updates them in the default location in your home directory.  <br /> 
-If there are two keys, the old key is deleted. 
+The old key/s are always deleted. 
 
 You can store the binary and set it as a cron on your system to automatically renew credentials after every few weeks.
 
