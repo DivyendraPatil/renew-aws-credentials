@@ -36,3 +36,5 @@ You can store the binary and set it as a cron on your system to automatically re
 
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
+![ScreenRecord](https://github.com/DivyendraPatil/renew-aws-credentials/blob/main/aws_renew_screen.gif)
